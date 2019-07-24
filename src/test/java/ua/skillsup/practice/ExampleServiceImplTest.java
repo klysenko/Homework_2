@@ -4,16 +4,16 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
-import org.powermock.api.mockito.PowerMockito;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
+import org.mockito.runners.MockitoJUnitRunner;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.Month;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.Collections;
@@ -22,12 +22,12 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.joining;
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@PrepareForTest({LocalDateTime.class, LocalDate.class, ExampleServiceImpl.class})
-@RunWith(PowerMockRunner.class)
+@RunWith(MockitoJUnitRunner.class)
 public class ExampleServiceImplTest {
     private static final int MIN_TITLE_LENGTH = 3;
     private static final int MAX_TITLE_LENGTH = 20;
@@ -36,6 +36,8 @@ public class ExampleServiceImplTest {
     private ExampleDao exampleDao;
     @Mock
     private IdGenerationService idGenerationService;
+    @Captor
+    private ArgumentCaptor<ExampleEntity> exampleEntityArgumentCaptor = ArgumentCaptor.forClass(ExampleEntity.class);
 
     private ExampleService exampleService;
 
@@ -47,29 +49,26 @@ public class ExampleServiceImplTest {
     @DisplayName("Happy path case")
     @Test
     public void addNewItem() {
-
         //GIVEN
         final String title = "expected";
         final BigDecimal price = BigDecimal.valueOf(100);
         final Long id = 1L;
-        final LocalDateTime date = LocalDateTime.of(2020, 1, 1, 1, 1, 1, 1);
-
-        PowerMockito.mockStatic(LocalDateTime.class);
-
-        PowerMockito.when(LocalDateTime.now()).thenReturn(date);
 
         ExampleEntity entity = new ExampleEntity();
         entity.setId(id);
         entity.setTitle(title);
         entity.setPrice(price.setScale(2, RoundingMode.HALF_UP));
-        entity.setDateIn(LocalDateTime.now().toInstant(ZoneOffset.UTC));
         when(idGenerationService.getNext()).thenReturn(id);
 
         //WHEN
         exampleService.addNewItem(title, price);
 
         //THEN
-        verify(exampleDao).store(entity);
+        verify(exampleDao).store(exampleEntityArgumentCaptor.capture());
+        ExampleEntity exampleEntity = exampleEntityArgumentCaptor.getValue();
+        assertThat(exampleEntity).isEqualToIgnoringGivenFields(entity, "dateIn");
+        LocalDate dateIn = LocalDateTime.ofInstant(exampleEntity.getDateIn(), ZoneId.ofOffset("UTC", ZoneOffset.UTC)).toLocalDate();
+        assertThat(dateIn).isEqualTo(LocalDate.now());
     }
 
     @DisplayName("Fail on null name")
@@ -139,17 +138,13 @@ public class ExampleServiceImplTest {
         final BigDecimal price = BigDecimal.valueOf(100);
         final String title = "expected";
         final Long id = 1L;
-        final LocalDateTime date = LocalDateTime.of(2020, 1, 1, 1, 1, 1, 1);
-
-        PowerMockito.mockStatic(LocalDateTime.class);
-
-        PowerMockito.when(LocalDateTime.now()).thenReturn(date);
+        final LocalDate date = LocalDate.of(2020, 1, 1);
 
         ExampleEntity entity = new ExampleEntity();
         entity.setId(id);
         entity.setTitle(title);
         entity.setPrice(price.setScale(2, RoundingMode.HALF_UP));
-        entity.setDateIn(LocalDateTime.now().toInstant(ZoneOffset.UTC));
+        entity.setDateIn(date.atStartOfDay().toInstant(ZoneOffset.UTC));
         when(idGenerationService.getNext()).thenReturn(id);
 
         //WHEN
@@ -206,21 +201,10 @@ public class ExampleServiceImplTest {
         final Long id1 = 1L;
         final Long id2 = 2L;
         final Long id3 = 3L;
-        final LocalDateTime date1 = LocalDateTime.of(2018, Month.MAY, 25, 1, 1, 1, 1);
-        final LocalDateTime date2 = LocalDateTime.of(2018, Month.MAY, 25, 1, 1, 1, 1);
-        final LocalDateTime today = LocalDateTime.of(2019, Month.JUNE, 26, 1, 1, 1, 1);
 
-        PowerMockito.mockStatic(LocalDateTime.class);
-        PowerMockito.mockStatic(LocalDate.class);
-
-        PowerMockito.when(LocalDate.now()).thenReturn(today.toLocalDate());
-
-        PowerMockito.when(LocalDateTime.ofInstant(date1.toInstant(ZoneOffset.UTC), ZoneOffset.UTC))
-                .thenReturn(date1);
-        PowerMockito.when(LocalDateTime.ofInstant(date2.toInstant(ZoneOffset.UTC), ZoneOffset.UTC))
-                .thenReturn(date2);
-        PowerMockito.when(LocalDateTime.ofInstant(today.toInstant(ZoneOffset.UTC), ZoneOffset.UTC))
-                .thenReturn(today);
+        final LocalDateTime date1 = LocalDateTime.now().minusDays(1);
+        final LocalDateTime date2 = LocalDateTime.now().minusDays(1);
+        final LocalDateTime today = LocalDateTime.now();
 
         ExampleEntity entity1 = new ExampleEntity();
         entity1.setId(id1);
@@ -266,21 +250,12 @@ public class ExampleServiceImplTest {
         final String title1 = "title1";
         final BigDecimal price1 = BigDecimal.valueOf(200);
         final Long id1 = 1L;
-        final LocalDateTime today = LocalDateTime.of(2019, Month.JUNE, 26, 1, 1, 1, 1);
-
-        PowerMockito.mockStatic(LocalDateTime.class);
-        PowerMockito.mockStatic(LocalDate.class);
-
-        PowerMockito.when(LocalDate.now()).thenReturn(today.toLocalDate());
-
-        PowerMockito.when(LocalDateTime.ofInstant(today.toInstant(ZoneOffset.UTC), ZoneOffset.UTC))
-                .thenReturn(today);
 
         ExampleEntity entity1 = new ExampleEntity();
         entity1.setId(id1);
         entity1.setTitle(title1);
         entity1.setPrice(price1.setScale(2, RoundingMode.HALF_UP));
-        entity1.setDateIn(today.toInstant(ZoneOffset.UTC));
+        entity1.setDateIn(LocalDateTime.now().toInstant(ZoneOffset.UTC));
         when(idGenerationService.getNext()).thenReturn(id1);
 
         when(exampleDao.findAll()).thenReturn(Arrays.asList(entity1));
